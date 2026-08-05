@@ -521,45 +521,29 @@ function renderScanner() {
 
       const hint = document.getElementById('scan-hint');
 
-      // Extraer el número de ítem del contenido del QR
+      // Extraer identificador del QR — acepta cualquier formato
       let itemId = null;
 
-      // Caso 1: URL con ?item=N  (ej: https://…?item=5)
+      // Caso 1: QR de nuestra app — URL con ?item=N
       try {
         const url = new URL(decoded);
         const p = url.searchParams.get('item');
-        if (p && !isNaN(parseInt(p))) itemId = String(parseInt(p));
+        if (p && p.trim()) itemId = p.trim();
       } catch {}
 
-      // Caso 2: solo un número
+      // Caso 2: cualquier otro contenido — usar el texto completo como ID
       if (!itemId) {
-        const num = parseInt(decoded.trim());
-        if (!isNaN(num) && num > 0) itemId = String(num);
-      }
-
-      // Caso 3: texto que termina en /N  (ej: …/inventario-qr/5)
-      if (!itemId) {
-        const match = decoded.match(/[\/?#](\d+)\s*$/);
-        if (match) itemId = match[1];
+        itemId = decoded.trim().substring(0, 200); // máx 200 chars
       }
 
       if (!itemId) {
-        // Mostrar lo que leyó para diagnóstico
-        if (hint) hint.innerHTML = `
-          <div class="alert alert-warning text-start mt-2 p-2" style="font-size:.8rem">
-            <strong>QR leído pero formato no reconocido.</strong><br>
-            Contenido: <code style="word-break:break-all">${decoded.substring(0,120)}</code><br>
-            <span class="text-muted">Usa el ingreso manual o regenera los QR desde la app.</span>
-          </div>`;
-        setTimeout(() => { alreadyScanned = false; }, 3000);
+        setTimeout(() => { alreadyScanned = false; }, 2000);
         return;
       }
 
-      // QR reconocido — navegar
       if (hint) hint.innerHTML = `<span class="text-success fw-bold fs-6">
-        <i class="bi bi-check-circle-fill"></i> Artículo #${itemId} detectado…</span>`;
+        <i class="bi bi-check-circle-fill"></i> Código detectado…</span>`;
 
-      // Detener escáner y navegar (sin esperar para evitar bloqueos)
       try { scanner.stop().catch(() => {}); } catch {}
       currentScanner = null;
       setTimeout(() => showView('item', { id: itemId }), 300);
@@ -572,8 +556,8 @@ function renderScanner() {
 }
 
 function goToItem(id) {
-  const num = parseInt(String(id).trim());
-  if (!isNaN(num) && num > 0) showView('item', { id: String(num) });
+  const clean = String(id).trim();
+  if (clean) showView('item', { id: clean });
 }
 
 // ══════════════════════════════════════════════════
@@ -581,7 +565,7 @@ function goToItem(id) {
 // ══════════════════════════════════════════════════
 async function renderItemPage(itemId) {
   const c = document.getElementById('main-content');
-  if (!itemId || isNaN(Number(itemId))) {
+  if (!itemId || !itemId.trim()) {
     c.innerHTML = `<div class="alert alert-danger">Código inválido.</div>`; return;
   }
   if (!requireFirebase()) return;
@@ -591,7 +575,7 @@ async function renderItemPage(itemId) {
     <button class="btn btn-link ps-0 mb-2 text-muted" onclick="history.back()">
       <i class="bi bi-arrow-left"></i> Volver
     </button>
-    <h5 class="mb-3">Artículo <span class="fw-black" style="color:#1a56db">#${itemId}</span></h5>
+    <h5 class="mb-3">Artículo <span class="fw-black" style="color:#1a56db">${itemId}</span></h5>
     <div id="item-body">${loading('Cargando artículo...')}</div>
   `;
 
