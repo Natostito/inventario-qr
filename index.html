@@ -198,6 +198,7 @@ try {
 //  ESTADO GLOBAL
 // ══════════════════════════════════════════════════
 let currentScanner = null;
+let navHistory = []; // historial de navegación interno
 const APP_URL = localStorage.getItem('appUrl') ||
                 (window.location.origin + window.location.pathname);
 
@@ -263,7 +264,13 @@ function statusBadge(status) {
 // ══════════════════════════════════════════════════
 //  NAVEGACIÓN
 // ══════════════════════════════════════════════════
-async function showView(view, params={}) {
+async function showView(view, params={}, addToHistory=true) {
+  // Guardar vista actual en historial antes de cambiar
+  if (addToHistory && navHistory[navHistory.length-1]?.view !== view) {
+    const current = navHistory[navHistory.length-1];
+    if (current) navHistory.push({ view, params });
+    else navHistory = [{ view, params }];
+  }
   await stopScanner();
   setNav(view);
   document.getElementById('main-content').innerHTML = loading();
@@ -274,6 +281,16 @@ async function showView(view, params={}) {
     case 'item':       return renderItemPage(params.id);
     case 'warehouse':  return renderWarehouseDetail(params.name, params.color);
     case 'settings':   return renderSettings();
+  }
+}
+
+async function goBack() {
+  navHistory.pop(); // quitar vista actual
+  const prev = navHistory[navHistory.length - 1];
+  if (prev) {
+    await showView(prev.view, prev.params, false);
+  } else {
+    await showView('dashboard', {}, false);
   }
 }
 
@@ -399,7 +416,7 @@ async function renderWarehouseDetail(warehouseName, color='#1a56db') {
   if (!requireFirebase()) return;
   const c = document.getElementById('main-content');
   c.innerHTML = `
-    <button class="btn btn-link ps-0 mb-1 text-muted" onclick="showView('dashboard')">
+    <button class="btn btn-link ps-0 mb-1 text-muted" onclick="goBack()">
       <i class="bi bi-arrow-left"></i> Volver
     </button>
     <div class="d-flex align-items-center gap-2 mb-3">
@@ -575,7 +592,7 @@ async function renderItemPage(itemId) {
 
   const WAREHOUSES = getWarehouses();
   c.innerHTML = `
-    <button class="btn btn-link ps-0 mb-2 text-muted" onclick="history.back()">
+    <button class="btn btn-link ps-0 mb-2 text-muted" onclick="goBack()">
       <i class="bi bi-arrow-left"></i> Volver
     </button>
     <h5 class="mb-3">Artículo <span class="fw-black" style="color:#1a56db">#${itemId}</span></h5>
@@ -898,7 +915,7 @@ function renderSettings() {
   const WAREHOUSES = getWarehouses();
 
   c.innerHTML = `
-    <button class="btn btn-link ps-0 mb-2 text-muted" onclick="showView('dashboard')">
+    <button class="btn btn-link ps-0 mb-2 text-muted" onclick="goBack()">
       <i class="bi bi-arrow-left"></i> Volver
     </button>
     <h5 class="mb-3">Configuración</h5>
