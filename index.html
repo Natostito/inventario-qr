@@ -517,31 +517,52 @@ function renderScanner() {
     { fps: 10, qrbox: { width: 240, height: 240 } },
     (decoded) => {
       if (alreadyScanned) return;
+      alreadyScanned = true;
+
+      const hint = document.getElementById('scan-hint');
 
       // Extraer el número de ítem del contenido del QR
       let itemId = null;
 
-      // Caso 1: el QR contiene una URL con ?item=N
+      // Caso 1: URL con ?item=N  (ej: https://…?item=5)
       try {
         const url = new URL(decoded);
         const p = url.searchParams.get('item');
         if (p && !isNaN(parseInt(p))) itemId = String(parseInt(p));
       } catch {}
 
-      // Caso 2: el QR contiene solo un número
+      // Caso 2: solo un número
       if (!itemId) {
         const num = parseInt(decoded.trim());
         if (!isNaN(num) && num > 0) itemId = String(num);
       }
 
-      if (!itemId) return; // QR no reconocido, seguir escaneando
+      // Caso 3: texto que termina en /N  (ej: …/inventario-qr/5)
+      if (!itemId) {
+        const match = decoded.match(/[\/?#](\d+)\s*$/);
+        if (match) itemId = match[1];
+      }
 
-      // Bloquear nuevas lecturas y navegar
-      alreadyScanned = true;
-      const hint = document.getElementById('scan-hint');
-      if (hint) hint.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> Código #${itemId} detectado…</span>`;
+      if (!itemId) {
+        // Mostrar lo que leyó para diagnóstico
+        if (hint) hint.innerHTML = `
+          <div class="alert alert-warning text-start mt-2 p-2" style="font-size:.8rem">
+            <strong>QR leído pero formato no reconocido.</strong><br>
+            Contenido: <code style="word-break:break-all">${decoded.substring(0,120)}</code><br>
+            <span class="text-muted">Usa el ingreso manual o regenera los QR desde la app.</span>
+          </div>`;
+        setTimeout(() => { alreadyScanned = false; }, 3000);
+        return;
+      }
 
-      stopScanner().then(() => goToItem(itemId));
+      // QR reconocido — navegar
+      if (hint) hint.innerHTML = `<span class="text-success fw-bold fs-6">
+        <i class="bi bi-check-circle-fill"></i> Artículo #${itemId} detectado…</span>`;
+
+      // Detener escáner y navegar (sin esperar para evitar bloqueos)
+      try { scanner.stop().catch(() => {}); } catch {}
+      currentScanner = null;
+      setTimeout(() => showView('item', { id: itemId }), 300);
     },
     () => {}
   ).catch(() => {
