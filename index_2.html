@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a56db">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Inventario QR">
+  <title>Inventario QR</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    :root {
+      --color-b1: #1a56db;
+      --color-b2: #16a34a;
+      --color-b3: #ea580c;
+      --color-b4: #dc2626;
+      --color-b5: #7c3aed;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding-bottom: 72px;
+      min-height: 100vh;
+    }
+
+    /* ── Top Nav ── */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 900;
+      background: #1a56db;
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    }
+    .top-nav .brand { font-weight: 700; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+    .top-nav .btn-icon { background: rgba(255,255,255,.15); border: none; color: #fff;
+      width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 1.1rem; cursor: pointer; transition: background .2s; }
+    .top-nav .btn-icon:hover { background: rgba(255,255,255,.3); }
+
+    /* ── Bottom Nav ── */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #fff;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      z-index: 900;
+      box-shadow: 0 -2px 12px rgba(0,0,0,.08);
+    }
+    .bottom-nav .nav-btn {
+      flex: 1;
+      border: none;
+      background: none;
+      padding: 10px 4px 8px;
+      color: #94a3b8;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color .15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .bottom-nav .nav-btn i { font-size: 1.4rem; }
+    .bottom-nav .nav-btn.active { color: #1a56db; }
+    .bottom-nav .nav-btn:hover { color: #1a56db; }
+
+    /* ── Scan button (center, raised) ── */
+    .bottom-nav .nav-btn.scan-btn {
+      background: #1a56db;
+      color: #fff !important;
+      border-radius: 50%;
+      width: 60px; height: 60px;
+      margin-top: -20px;
+      margin-bottom: 4px;
+      flex: 0 0 72px;
+      box-shadow: 0 4px 16px rgba(26,86,219,.5);
+    }
+    .bottom-nav .nav-btn.scan-btn.active { background: #1e40af; }
+
+    /* ── Cards ── */
+    .card { border: none; border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .warehouse-card { border-left: 5px solid; }
+
+    /* ── Status badges ── */
+    .badge-available { background: #dcfce7; color: #15803d; }
+    .badge-sold { background: #fee2e2; color: #dc2626; }
+    .badge-pending { background: #fef9c3; color: #854d0e; }
+
+    /* ── Item Status Display ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 8px 14px;
+      border-radius: 999px;
+      width: fit-content;
+    }
+    .status-bar.available { background: #dcfce7; color: #15803d; }
+    .status-bar.sold { background: #fee2e2; color: #dc2626; }
+
+    /* ── QR print grid ── */
+    .qr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .qr-item { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px;
+      padding: 8px; text-align: center; }
+    .qr-item .qr-num { font-weight: 800; font-size: 0.85rem; color: #1e293b; margin-top: 4px; }
+
+    /* ── Spinner ── */
+    .loading-overlay { display: flex; align-items: center; justify-content: center;
+      min-height: 180px; flex-direction: column; gap: 12px; color: #64748b; }
+
+    /* ── Scanner ── */
+    #qr-reader { border-radius: 14px; overflow: hidden; }
+    #qr-reader video { border-radius: 14px; }
+    #qr-reader__scan_region { border-radius: 14px; }
+
+    /* ── Print ── */
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 0; background: #fff; }
+      .qr-grid { grid-template-columns: repeat(4, 1fr); }
+      .qr-item { border: 1px solid #999; page-break-inside: avoid; }
+    }
+
+    @media (max-width: 400px) {
+      .qr-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Top navbar -->
+<div class="top-nav no-print">
+  <div class="brand"><i class="bi bi-box-seam-fill"></i> Inventario QR</div>
+  <button class="btn-icon" onclick="showView('settings')" title="Configuración">
+    <i class="bi bi-gear-fill"></i>
+  </button>
+</div>
+
+<!-- Main content -->
+<div id="main-content" class="px-3 py-3"></div>
+
+<!-- Bottom nav -->
+<div class="bottom-nav no-print">
+  <button class="nav-btn active" id="nav-dashboard" onclick="showView('dashboard')">
+    <i class="bi bi-grid-3x3-gap-fill"></i>
+    Inventario
+  </button>
+  <button class="nav-btn scan-btn" id="nav-scan" onclick="showView('scan')">
+    <i class="bi bi-qr-code-scan" style="font-size:1.6rem"></i>
+  </button>
+  <button class="nav-btn" id="nav-generate" onclick="showView('generate')">
+    <i class="bi bi-printer-fill"></i>
+    Generar QR
+  </button>
+</div>
+
+
+<!-- ===== SCRIPTS ===== -->
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<!-- QR Code generator -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- QR Scanner -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<!-- Bootstrap JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// ══════════════════════════════════════════════════
+//  ⚙️  CONFIGURACIÓN  — editar estos valores
+// ══════════════════════════════════════════════════
+
+// 1) Crea tu proyecto en https://console.firebase.google.com
+//    y reemplaza estos datos con los de tu proyecto.
+const FIREBASE_CONFIG = {
+  apiKey:            "REEMPLAZAR_API_KEY",
+  authDomain:        "REEMPLAZAR_PROJECT_ID.firebaseapp.com",
+  projectId:         "REEMPLAZAR_PROJECT_ID",
+  storageBucket:     "REEMPLAZAR_PROJECT_ID.appspot.com",
+  messagingSenderId: "REEMPLAZAR_SENDER_ID",
+  appId:             "REEMPLAZAR_APP_ID"
+};
+
+// 2) Nombres de tus 5 bodegas (puedes cambiarlos)
+const WAREHOUSES = ['Bodega 1', 'Bodega 2', 'Bodega 3', 'Bodega 4', 'Bodega 5'];
+const WAREHOUSE_COLORS = ['#1a56db', '#16a34a', '#ea580c', '#dc2626', '#7c3aed'];
+
+// ══════════════════════════════════════════════════
+//  FIREBASE INIT
+// ══════════════════════════════════════════════════
+let db;
+let firebaseReady = false;
+
+try {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.firestore();
+  firebaseReady = true;
+} catch(e) {
+  console.warn('Firebase no configurado aún.');
+}
+
+// ══════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ══════════════════════════════════════════════════
+let currentView = null;
+let currentScanner = null;
+const APP_URL = localStorage.getItem('appUrl') ||
+                (window.location.origin + window.location.pathname);
+
+// ══════════════════════════════════════════════════
+//  UTILIDADES
+// ══════════════════════════════════════════════════
+function formatDate(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric',
+    hour:'2-digit', minute:'2-digit' });
+}
+
+async function stopScanner() {
+  if (currentScanner) {
+    try { await currentScanner.stop(); } catch(e) {}
+    currentScanner = null;
+  }
+}
+
+function setNav(view) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const map = { dashboard:'nav-dashboard', scan:'nav-scan', generate:'nav-generate' };
+  if (map[view]) document.getElementById(map[view]).classList.add('active');
+}
+
+function loading(text='Cargando...') {
+  return `<div class="loading-overlay">
+    <div class="spinner-border text-primary" role="status"></div>
+    <span>${text}</span>
+  </div>`;
+}
+
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `alert alert-${type} position-fixed top-0 start-50 translate-middle-x mt-3 shadow`;
+  t.style.cssText = 'z-index:9999;min-width:260px;text-align:center;border-radius:999px';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2800);
+}
+
+function requireFirebase() {
+  if (!firebaseReady) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="alert alert-warning mt-2">
+        <h6><i class="bi bi-exclamation-triangle-fill"></i> Firebase no configurado</h6>
+        <p class="mb-2 small">Aún no has ingresado los datos de tu proyecto Firebase.
+        Ve a <strong>Configuración</strong> para ingresarlos, o edita directamente el archivo HTML.</p>
+        <button class="btn btn-sm btn-warning" onclick="showView('settings')">Ir a Configuración</button>
+      </div>`;
+    return false;
+  }
+  return true;
+}
+
+// ══════════════════════════════════════════════════
+//  NAVEGACIÓN
+// ══════════════════════════════════════════════════
+async function showView(view, params={}) {
+  await stopScanner();
+  currentView = view;
+  setNav(view);
+  document.getElementById('main-content').innerHTML = loading();
+
+  switch(view) {
+    case 'dashboard': return renderDashboard();
+    case 'scan':      return renderScanner();
+    case 'generate':  return renderQRGenerator();
+    case 'item':      return renderItemPage(params.id);
+    case 'settings':  return renderSettings();
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  VISTA: DASHBOARD
+// ══════════════════════════════════════════════════
+async function renderDashboard() {
+  const c = document.getElementById('main-content');
+
+  if (!requireFirebase()) return;
+
+  c.innerHTML = `
+    <h6 class="text-muted fw-bold mb-3 text-uppercase" style="font-size:.72rem;letter-spacing:.06em">
+      Resumen por Bodega
+    </h6>
+    <div id="wh-cards">${loading()}</div>
+    <h6 class="text-muted fw-bold mt-4 mb-3 text-uppercase" style="font-size:.72rem;letter-spacing:.06em">
+      Actividad Reciente
+    </h6>
+    <div id="activity-list">${loading()}</div>
+  `;
+
+  try {
+    const snap = await db.collection('items').get();
+    const items = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+    // Stats por bodega
+    const stats = {};
+    WAREHOUSES.forEach(w => { stats[w] = { total:0, available:0, sold:0 }; });
+
+    items.forEach(it => {
+      if (it.warehouse && stats[it.warehouse]) {
+        stats[it.warehouse].total++;
+        if (it.status === 'available') stats[it.warehouse].available++;
+        if (it.status === 'sold')      stats[it.warehouse].sold++;
+      }
+    });
+
+    const totalItems     = items.length;
+    const totalAvailable = items.filter(i => i.status === 'available').length;
+    const totalSold      = items.filter(i => i.status === 'sold').length;
+
+    document.getElementById('wh-cards').innerHTML = `
+      <!-- Resumen global -->
+      <div class="card mb-3 p-3" style="background:linear-gradient(135deg,#1a56db,#3b82f6);color:#fff">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="fw-bold">Total registrado</span>
+          <span class="badge bg-white text-primary fs-6">${totalItems}</span>
+        </div>
+        <div class="d-flex gap-3">
+          <span><i class="bi bi-check-circle-fill"></i> ${totalAvailable} disponibles</span>
+          <span><i class="bi bi-bag-check-fill"></i> ${totalSold} vendidos</span>
+        </div>
+      </div>
+
+      ${WAREHOUSES.map((w, i) => `
+        <div class="card mb-2 warehouse-card" style="border-left-color:${WAREHOUSE_COLORS[i]}">
+          <div class="card-body py-2 px-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fw-bold" style="color:${WAREHOUSE_COLORS[i]}">${w}</span>
+              <span class="badge rounded-pill" style="background:${WAREHOUSE_COLORS[i]}20;color:${WAREHOUSE_COLORS[i]}">
+                ${stats[w].total} artículos
+              </span>
+            </div>
+            <div class="mt-1 d-flex gap-2">
+              <span class="badge badge-available rounded-pill">
+                <i class="bi bi-circle-fill" style="font-size:.5em"></i> ${stats[w].available} disponibles
+              </span>
+              <span class="badge badge-sold rounded-pill">
+                <i class="bi bi-bag-check-fill" style="font-size:.6em"></i> ${stats[w].sold} vendidos
+              </span>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    `;
+
+    // Actividad reciente
+    const recent = items
+      .filter(i => i.registeredAt)
+      .sort((a, b) => {
+        const tA = a.soldAt?.toMillis?.() || a.registeredAt?.toMillis?.() || 0;
+        const tB = b.soldAt?.toMillis?.() || b.registeredAt?.toMillis?.() || 0;
+        return tB - tA;
+      })
+      .slice(0, 15);
+
+    document.getElementById('activity-list').innerHTML = recent.length === 0
+      ? '<p class="text-muted text-center py-3">Sin actividad registrada aún</p>'
+      : recent.map(it => {
+          const wIdx = WAREHOUSES.indexOf(it.warehouse);
+          const color = wIdx >= 0 ? WAREHOUSE_COLORS[wIdx] : '#64748b';
+          return `
+          <div class="card mb-2" onclick="showView('item',{id:'${it._id}'})" style="cursor:pointer">
+            <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
+              <div class="rounded-circle d-flex align-items-center justify-content-center"
+                style="background:${color}18;color:${color};width:38px;height:38px;flex-shrink:0;font-weight:800;font-size:.85rem">
+                #${it._id}
+              </div>
+              <div class="flex-grow-1 overflow-hidden">
+                <div class="fw-semibold text-truncate">${it.description || 'Sin descripción'}</div>
+                <div class="text-muted small">${it.warehouse}</div>
+              </div>
+              <span class="badge rounded-pill ${it.status === 'sold' ? 'badge-sold' : 'badge-available'} ms-auto flex-shrink-0">
+                ${it.status === 'sold' ? 'Vendido' : 'Disponible'}
+              </span>
+            </div>
+          </div>`;
+        }).join('');
+
+  } catch(e) {
+    document.getElementById('wh-cards').innerHTML = `
+      <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle-fill"></i> Error al conectar con Firebase.<br>
+        <small>${e.message}</small>
+      </div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  VISTA: ESCÁNER
+// ══════════════════════════════════════════════════
+function renderScanner() {
+  const c = document.getElementById('main-content');
+  c.innerHTML = `
+    <h6 class="text-muted fw-bold mb-3 text-uppercase" style="font-size:.72rem;letter-spacing:.06em">
+      Escanear Código QR
+    </h6>
+    <div id="qr-reader" class="mb-3" style="width:100%;max-width:420px;margin:auto"></div>
+    <p class="text-center text-muted small" id="scan-hint">
+      <i class="bi bi-camera"></i> Apunta la cámara al código QR
+    </p>
+    <hr class="my-3">
+    <p class="text-muted small mb-1">¿Sin cámara? Ingresa el número manualmente:</p>
+    <div class="input-group">
+      <span class="input-group-text"><i class="bi bi-hash"></i></span>
+      <input type="number" class="form-control form-control-lg" id="manual-id"
+        placeholder="Número del artículo" min="1" inputmode="numeric">
+      <button class="btn btn-primary px-4" onclick="goToItem(document.getElementById('manual-id').value)">
+        Ir <i class="bi bi-arrow-right"></i>
+      </button>
+    </div>
+    <div class="mt-2">
+      <kbd>Enter</kbd> para confirmar
+    </div>
+  `;
+
+  document.getElementById('manual-id').addEventListener('keydown', e => {
+    if (e.key === 'Enter') goToItem(e.target.value);
+  });
+
+  // Start camera
+  const scanner = new Html5Qrcode('qr-reader');
+  currentScanner = scanner;
+
+  scanner.start(
+    { facingMode: 'environment' },
+    { fps: 12, qrbox: { width: 240, height: 240 } },
+    (decoded) => {
+      // Parse item ID from URL or plain number
+      let itemId;
+      try {
+        const url = new URL(decoded);
+        itemId = url.searchParams.get('item');
+      } catch {
+        const num = parseInt(decoded.trim());
+        if (!isNaN(num)) itemId = String(num);
+      }
+      if (itemId) {
+        stopScanner().then(() => goToItem(itemId));
+      }
+    },
+    () => {}
+  ).catch(() => {
+    document.getElementById('scan-hint').innerHTML =
+      '<i class="bi bi-exclamation-triangle text-warning"></i> No se pudo acceder a la cámara. Usa el ingreso manual.';
+  });
+}
+
+function goToItem(id) {
+  const num = parseInt(String(id).trim());
+  if (!isNaN(num) && num > 0) showView('item', { id: String(num) });
+}
+
+// ══════════════════════════════════════════════════
+//  VISTA: ARTÍCULO
+// ══════════════════════════════════════════════════
+async function renderItemPage(itemId) {
+  const c = document.getElementById('main-content');
+
+  if (!itemId || isNaN(Number(itemId))) {
+    c.innerHTML = `<div class="alert alert-danger">Código inválido.</div>`;
+    return;
+  }
+
+  if (!requireFirebase()) return;
+
+  c.innerHTML = `
+    <button class="btn btn-link ps-0 mb-2 text-muted" onclick="showView('scan')">
+      <i class="bi bi-arrow-left"></i> Volver
+    </button>
+    <h5 class="mb-3">Artículo <span class="text-primary fw-black">#${itemId}</span></h5>
+    <div id="item-body">${loading('Cargando artículo...')}</div>
+  `;
+
+  try {
+    const doc = await db.collection('items').doc(String(itemId)).get();
+
+    if (!doc.exists) {
+      // NOT REGISTERED
+      document.getElementById('item-body').innerHTML = `
+        <div class="alert alert-info d-flex align-items-center gap-2 mb-3">
+          <i class="bi bi-info-circle-fill fs-5"></i>
+          <span>Este artículo aún <strong>no está registrado</strong>. Rellena el formulario para ingresarlo.</span>
+        </div>
+        <div class="card">
+          <div class="card-body">
+            <h6 class="card-title mb-3"><i class="bi bi-pencil-square"></i> Registrar Artículo</h6>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Descripción <span class="text-danger">*</span></label>
+              <textarea class="form-control" id="inp-desc" rows="3"
+                placeholder="Ej: Ventana de vidrio templado 1.2×2m, color bronce..."></textarea>
+            </div>
+            <div class="mb-4">
+              <label class="form-label fw-semibold">Bodega de destino <span class="text-danger">*</span></label>
+              <select class="form-select" id="inp-warehouse">
+                <option value="">— Selecciona una bodega —</option>
+                ${WAREHOUSES.map(w => `<option value="${w}">${w}</option>`).join('')}
+              </select>
+            </div>
+            <button class="btn btn-primary w-100 btn-lg" onclick="registerItem('${itemId}')">
+              <i class="bi bi-check-lg"></i> Registrar en Bodega
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      // REGISTERED
+      const it = doc.data();
+      const wIdx = WAREHOUSES.indexOf(it.warehouse);
+      const color = wIdx >= 0 ? WAREHOUSE_COLORS[wIdx] : '#64748b';
+      const isSold = it.status === 'sold';
+
+      document.getElementById('item-body').innerHTML = `
+        <div class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="status-bar ${isSold ? 'sold' : 'available'}">
+                <i class="bi ${isSold ? 'bi-bag-check-fill' : 'bi-circle-fill'}"></i>
+                ${isSold ? 'VENDIDO' : 'DISPONIBLE'}
+              </div>
+            </div>
+            <table class="table table-sm mb-0">
+              <tbody>
+                <tr>
+                  <td class="text-muted" style="width:110px">Artículo</td>
+                  <td><strong>#${itemId}</strong></td>
+                </tr>
+                <tr>
+                  <td class="text-muted">Descripción</td>
+                  <td>${it.description || '—'}</td>
+                </tr>
+                <tr>
+                  <td class="text-muted">Bodega</td>
+                  <td>
+                    <span class="badge rounded-pill" style="background:${color}20;color:${color}">
+                      ${it.warehouse || '—'}
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-muted">Registrado</td>
+                  <td>${formatDate(it.registeredAt)}</td>
+                </tr>
+                ${isSold ? `<tr><td class="text-muted">Vendido</td><td>${formatDate(it.soldAt)}</td></tr>` : ''}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        ${!isSold ? `
+          <button class="btn btn-danger w-100 btn-lg mb-2" onclick="confirmSell('${itemId}')">
+            <i class="bi bi-bag-check-fill"></i> Marcar como Vendido
+          </button>
+          <button class="btn btn-outline-secondary w-100" onclick="showTransfer('${itemId}','${it.warehouse}')">
+            <i class="bi bi-arrow-left-right"></i> Transferir a otra Bodega
+          </button>
+          <!-- Transfer form (hidden) -->
+          <div id="transfer-form" class="card mt-3 d-none">
+            <div class="card-body">
+              <h6>Selecciona bodega destino</h6>
+              ${WAREHOUSES.filter(w => w !== it.warehouse).map(w => `
+                <button class="btn btn-outline-primary w-100 mb-2" onclick="doTransfer('${itemId}','${w}')">
+                  ${w}
+                </button>
+              `).join('')}
+              <button class="btn btn-link" onclick="document.getElementById('transfer-form').classList.add('d-none')">Cancelar</button>
+            </div>
+          </div>
+        ` : `
+          <div class="alert alert-secondary text-center">
+            <i class="bi bi-info-circle"></i> Este artículo ya fue dado de baja.
+          </div>
+        `}
+      `;
+    }
+  } catch(e) {
+    document.getElementById('item-body').innerHTML = `
+      <div class="alert alert-danger">Error: ${e.message}</div>`;
+  }
+}
+
+async function registerItem(itemId) {
+  const desc      = document.getElementById('inp-desc').value.trim();
+  const warehouse = document.getElementById('inp-warehouse').value;
+  if (!desc)      { toast('Ingresa una descripción', 'warning'); return; }
+  if (!warehouse) { toast('Selecciona una bodega', 'warning'); return; }
+
+  const btn = document.querySelector('#item-body .btn-primary');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Registrando...';
+
+  try {
+    await db.collection('items').doc(String(itemId)).set({
+      description: desc,
+      warehouse,
+      status: 'available',
+      registeredAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast('✓ Artículo registrado correctamente');
+    renderItemPage(itemId);
+  } catch(e) {
+    toast('Error: ' + e.message, 'danger');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg"></i> Registrar en Bodega';
+  }
+}
+
+function confirmSell(itemId) {
+  // Reemplazamos confirm() con un modal inline para evitar bloqueos
+  const body = document.getElementById('item-body');
+  const existing = document.getElementById('confirm-sell-bar');
+  if (existing) { existing.remove(); return; }
+
+  const bar = document.createElement('div');
+  bar.id = 'confirm-sell-bar';
+  bar.className = 'alert alert-danger mt-2 d-flex flex-column gap-2';
+  bar.innerHTML = `
+    <strong>¿Confirmas la venta de este artículo?</strong>
+    <div class="d-flex gap-2">
+      <button class="btn btn-danger flex-grow-1" onclick="doSell('${itemId}')">Sí, marcar como vendido</button>
+      <button class="btn btn-outline-secondary" onclick="this.parentElement.parentElement.remove()">Cancelar</button>
+    </div>
+  `;
+  body.appendChild(bar);
+}
+
+async function doSell(itemId) {
+  try {
+    await db.collection('items').doc(String(itemId)).update({
+      status: 'sold',
+      soldAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast('✓ Artículo marcado como vendido');
+    renderItemPage(itemId);
+  } catch(e) {
+    toast('Error: ' + e.message, 'danger');
+  }
+}
+
+function showTransfer(itemId, currentWarehouse) {
+  document.getElementById('transfer-form').classList.remove('d-none');
+}
+
+async function doTransfer(itemId, newWarehouse) {
+  try {
+    await db.collection('items').doc(String(itemId)).update({
+      warehouse: newWarehouse,
+      transferredAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast(`✓ Transferido a ${newWarehouse}`);
+    renderItemPage(itemId);
+  } catch(e) {
+    toast('Error: ' + e.message, 'danger');
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  VISTA: GENERADOR DE QR
+// ══════════════════════════════════════════════════
+function renderQRGenerator() {
+  const c = document.getElementById('main-content');
+  c.innerHTML = `
+    <h6 class="text-muted fw-bold mb-3 text-uppercase" style="font-size:.72rem;letter-spacing:.06em">
+      Generar Códigos QR para Imprimir
+    </h6>
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-5">
+            <label class="form-label fw-semibold">Desde</label>
+            <input type="number" class="form-control form-control-lg" id="qr-from" value="1" min="1" inputmode="numeric">
+          </div>
+          <div class="col-5">
+            <label class="form-label fw-semibold">Hasta</label>
+            <input type="number" class="form-control form-control-lg" id="qr-to" value="20" min="1" inputmode="numeric">
+          </div>
+          <div class="col-2 text-muted text-center" style="padding-bottom:8px">
+            <small id="qr-count">20 QR</small>
+          </div>
+        </div>
+        <button class="btn btn-primary w-100 mt-3 btn-lg" onclick="generateQRCodes()">
+          <i class="bi bi-qr-code"></i> Generar
+        </button>
+      </div>
+    </div>
+    <div id="qr-output"></div>
+  `;
+
+  function updateCount() {
+    const f = parseInt(document.getElementById('qr-from').value) || 1;
+    const t = parseInt(document.getElementById('qr-to').value) || 1;
+    const n = Math.max(0, t - f + 1);
+    document.getElementById('qr-count').textContent = `${n} QR`;
+  }
+  document.getElementById('qr-from').addEventListener('input', updateCount);
+  document.getElementById('qr-to').addEventListener('input', updateCount);
+}
+
+function generateQRCodes() {
+  const from = parseInt(document.getElementById('qr-from').value);
+  const to   = parseInt(document.getElementById('qr-to').value);
+
+  if (isNaN(from) || isNaN(to) || from < 1) {
+    toast('Ingresa números válidos', 'warning'); return;
+  }
+  if (to < from) {
+    toast('El número final debe ser mayor al inicial', 'warning'); return;
+  }
+  if ((to - from + 1) > 500) {
+    toast('Máximo 500 códigos a la vez', 'warning'); return;
+  }
+
+  const count = to - from + 1;
+  const ids   = Array.from({ length: count }, (_, i) => from + i);
+
+  document.getElementById('qr-output').innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+      <span class="text-muted small">${count} código${count > 1 ? 's' : ''} — del #${from} al #${to}</span>
+      <button class="btn btn-success btn-sm" onclick="window.print()">
+        <i class="bi bi-printer"></i> Imprimir
+      </button>
+    </div>
+    <div class="qr-grid" id="qr-grid">
+      ${ids.map(n => `
+        <div class="qr-item">
+          <div id="qr-${n}" style="display:flex;justify-content:center"></div>
+          <div class="qr-num">#${n}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Generate QR images (batched to avoid UI freeze)
+  const appUrl = localStorage.getItem('appUrl') || APP_URL;
+  let i = 0;
+  function batch() {
+    const end = Math.min(i + 20, ids.length);
+    for (; i < end; i++) {
+      const n = ids[i];
+      const el = document.getElementById(`qr-${n}`);
+      if (el) {
+        new QRCode(el, {
+          text: `${appUrl}?item=${n}`,
+          width: 72, height: 72,
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      }
+    }
+    if (i < ids.length) requestAnimationFrame(batch);
+  }
+  requestAnimationFrame(batch);
+}
+
+// ══════════════════════════════════════════════════
+//  VISTA: CONFIGURACIÓN
+// ══════════════════════════════════════════════════
+function renderSettings() {
+  const c = document.getElementById('main-content');
+  const savedUrl = localStorage.getItem('appUrl') || APP_URL;
+
+  c.innerHTML = `
+    <button class="btn btn-link ps-0 mb-2 text-muted" onclick="showView('dashboard')">
+      <i class="bi bi-arrow-left"></i> Volver
+    </button>
+    <h5 class="mb-3">Configuración</h5>
+
+    <!-- URL de la App -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h6><i class="bi bi-link-45deg"></i> URL de la Aplicación</h6>
+        <p class="text-muted small mb-2">
+          Esta URL se incrusta en cada QR para que al escanearlo abra directamente el artículo.
+          Debe ser la URL pública donde estás alojando esta app.
+        </p>
+        <input type="url" class="form-control mb-2" id="app-url-input" value="${savedUrl}"
+          placeholder="https://mi-inventario.netlify.app/index.html">
+        <button class="btn btn-primary btn-sm" onclick="saveAppUrl()">Guardar URL</button>
+      </div>
+    </div>
+
+    <!-- Firebase -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h6><i class="bi bi-fire"></i> Firebase</h6>
+        <p class="text-muted small mb-2">
+          Ingresa los datos de tu proyecto Firebase.
+          Los encontrarás en: Consola Firebase → Configuración del proyecto → Tu app web.
+        </p>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">API Key</label>
+          <input type="text" class="form-control form-control-sm font-monospace" id="fb-apiKey"
+            placeholder="AIzaSy..." value="${FIREBASE_CONFIG.apiKey.startsWith('REEMPLAZAR') ? '' : FIREBASE_CONFIG.apiKey}">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Project ID</label>
+          <input type="text" class="form-control form-control-sm font-monospace" id="fb-projectId"
+            placeholder="mi-inventario-abc12" value="${FIREBASE_CONFIG.projectId.startsWith('REEMPLAZAR') ? '' : FIREBASE_CONFIG.projectId}">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">App ID</label>
+          <input type="text" class="form-control form-control-sm font-monospace" id="fb-appId"
+            placeholder="1:123456:web:abc..." value="${FIREBASE_CONFIG.appId.startsWith('REEMPLAZAR') ? '' : FIREBASE_CONFIG.appId}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Messaging Sender ID</label>
+          <input type="text" class="form-control form-control-sm font-monospace" id="fb-senderId"
+            placeholder="123456789" value="${FIREBASE_CONFIG.messagingSenderId.startsWith('REEMPLAZAR') ? '' : FIREBASE_CONFIG.messagingSenderId}">
+        </div>
+        <button class="btn btn-warning btn-sm" onclick="saveFirebaseConfig()">
+          Guardar y Recargar
+        </button>
+        <p class="text-muted small mt-2 mb-0">
+          <i class="bi bi-info-circle"></i>
+          También puedes editar directamente el bloque <code>FIREBASE_CONFIG</code> en el archivo HTML.
+        </p>
+      </div>
+    </div>
+
+    <!-- Bodegas -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h6><i class="bi bi-building"></i> Bodegas</h6>
+        <p class="text-muted small">Actualmente configuradas:</p>
+        ${WAREHOUSES.map((w, i) => `
+          <span class="badge me-1 mb-1" style="background:${WAREHOUSE_COLORS[i]}20;color:${WAREHOUSE_COLORS[i]};font-size:.8rem">${w}</span>
+        `).join('')}
+        <p class="text-muted small mt-2 mb-0">
+          Para cambiarlas, edita el array <code>WAREHOUSES</code> en el archivo HTML.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function saveAppUrl() {
+  const url = document.getElementById('app-url-input').value.trim();
+  if (!url) { toast('Ingresa una URL válida', 'warning'); return; }
+  localStorage.setItem('appUrl', url);
+  toast('✓ URL guardada');
+}
+
+function saveFirebaseConfig() {
+  const cfg = {
+    apiKey:            document.getElementById('fb-apiKey').value.trim(),
+    projectId:         document.getElementById('fb-projectId').value.trim(),
+    appId:             document.getElementById('fb-appId').value.trim(),
+    messagingSenderId: document.getElementById('fb-senderId').value.trim(),
+  };
+  if (!cfg.apiKey || !cfg.projectId) {
+    toast('Completa al menos API Key y Project ID', 'warning'); return;
+  }
+  localStorage.setItem('firebaseConfig', JSON.stringify(cfg));
+  toast('Configuración guardada. Recargando...');
+  setTimeout(() => location.reload(), 1500);
+}
+
+// Load saved Firebase config from localStorage if present
+(function loadSavedConfig() {
+  const saved = localStorage.getItem('firebaseConfig');
+  if (saved) {
+    try {
+      const cfg = JSON.parse(saved);
+      Object.assign(FIREBASE_CONFIG, cfg);
+      FIREBASE_CONFIG.authDomain    = `${cfg.projectId}.firebaseapp.com`;
+      FIREBASE_CONFIG.storageBucket = `${cfg.projectId}.appspot.com`;
+    } catch(e) {}
+  }
+})();
+
+// ══════════════════════════════════════════════════
+//  INIT — detectar si se abrió desde un QR
+// ══════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  const params  = new URLSearchParams(window.location.search);
+  const itemId  = params.get('item');
+  if (itemId && !isNaN(Number(itemId))) {
+    showView('item', { id: itemId });
+  } else {
+    showView('dashboard');
+  }
+});
+</script>
+
+</body>
+</html>
