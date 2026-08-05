@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#1a56db">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Inventario QR">
-  <title>Inventario QR</title>
+  <meta name="apple-mobile-web-app-title" content="Master Glass">
+  <title>Master Glass</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
   <style>
@@ -118,7 +118,7 @@
 
 <div class="top-nav no-print">
   <div class="brand" onclick="showView('dashboard')">
-    <i class="bi bi-box-seam-fill"></i> Inventario QR
+    <i class="bi bi-gem"></i> Master Glass
   </div>
   <button class="btn-icon" onclick="showView('settings')" title="Configuración">
     <i class="bi bi-gear-fill"></i>
@@ -817,7 +817,6 @@ function generateQRCodes() {
 function renderSettings() {
   const c = document.getElementById('main-content');
   const WAREHOUSES = getWarehouses();
-  const savedUrl = localStorage.getItem('appUrl') || APP_URL;
 
   c.innerHTML = `
     <button class="btn btn-link ps-0 mb-2 text-muted" onclick="showView('dashboard')">
@@ -825,24 +824,37 @@ function renderSettings() {
     </button>
     <h5 class="mb-3">Configuración</h5>
 
-    <!-- Nombres de bodegas -->
+    <!-- Bodegas -->
     <div class="card mb-3">
       <div class="card-body">
-        <h6 class="mb-1"><i class="bi bi-building"></i> Nombres de Bodegas / Camionetas</h6>
-        <p class="text-muted small mb-3">Personaliza los nombres según tus vehículos o patentes.</p>
+        <h6 class="mb-1"><i class="bi bi-building"></i> Bodegas / Camionetas</h6>
+        <p class="text-muted small mb-3">Agrega, renombra o elimina según tus vehículos o patentes.</p>
         <div id="wh-list">
           ${WAREHOUSES.map((w, i) => `
-            <div class="input-group mb-2">
-              <span class="input-group-text" style="background:${WAREHOUSE_COLORS[i]}20;color:${WAREHOUSE_COLORS[i]};width:36px;justify-content:center">
+            <div class="input-group mb-2" id="wh-row-${i}">
+              <span class="input-group-text fw-bold"
+                style="background:${WAREHOUSE_COLORS[i % WAREHOUSE_COLORS.length]}20;
+                       color:${WAREHOUSE_COLORS[i % WAREHOUSE_COLORS.length]};
+                       width:36px;justify-content:center">
                 ${i+1}
               </span>
-              <input type="text" class="form-control" id="wh-${i}" value="${w}" maxlength="40">
+              <input type="text" class="form-control" id="wh-${i}" value="${w}" maxlength="40"
+                placeholder="Ej: Camioneta ABCD-12">
+              <button class="btn btn-outline-danger" onclick="removeWarehouse(${i})" title="Eliminar">
+                <i class="bi bi-trash3"></i>
+              </button>
             </div>
           `).join('')}
         </div>
-        <div class="d-flex gap-2 mt-3">
+
+        <!-- Agregar nueva -->
+        <button class="btn btn-outline-primary w-100 mt-1 mb-3" onclick="addWarehouseRow()">
+          <i class="bi bi-plus-lg"></i> Agregar bodega
+        </button>
+
+        <div class="d-flex gap-2">
           <button class="btn btn-primary flex-grow-1" onclick="saveWarehouseNames()">
-            <i class="bi bi-check-lg"></i> Guardar nombres
+            <i class="bi bi-check-lg"></i> Guardar cambios
           </button>
           <button class="btn btn-outline-secondary" onclick="resetWarehouseNames()">
             Restablecer
@@ -850,37 +862,49 @@ function renderSettings() {
         </div>
       </div>
     </div>
-
-    <!-- URL de la app -->
-    <div class="card mb-3">
-      <div class="card-body">
-        <h6><i class="bi bi-link-45deg"></i> URL de la Aplicación</h6>
-        <p class="text-muted small mb-2">URL que se incrusta en los QR. Debe ser tu URL pública de GitHub Pages.</p>
-        <input type="url" class="form-control mb-2" id="app-url-input" value="${savedUrl}"
-          placeholder="https://natostito.github.io/inventario-qr/">
-        <button class="btn btn-primary btn-sm" onclick="saveAppUrl()">Guardar URL</button>
-      </div>
-    </div>
-
-    <!-- Firebase info -->
-    <div class="card mb-3">
-      <div class="card-body">
-        <h6><i class="bi bi-fire"></i> Firebase</h6>
-        <p class="text-muted small mb-0">
-          Proyecto conectado: <code>inventario-qr-ce795</code><br>
-          Para cambiar la configuración, edita el bloque <code>FIREBASE_CONFIG</code> en el HTML.
-        </p>
-      </div>
-    </div>
   `;
 }
 
-function saveWarehouseNames() {
-  const WAREHOUSES = getWarehouses();
-  const names = WAREHOUSES.map((_, i) => {
-    const val = document.getElementById(`wh-${i}`)?.value.trim();
-    return val || `Bodega ${i+1}`;
+function addWarehouseRow() {
+  const list = document.getElementById('wh-list');
+  const rows = list.querySelectorAll('.input-group');
+  const i = rows.length;
+  if (i >= WAREHOUSE_COLORS.length * 2) { toast('Máximo 10 bodegas', 'warning'); return; }
+  const color = WAREHOUSE_COLORS[i % WAREHOUSE_COLORS.length];
+  const div = document.createElement('div');
+  div.className = 'input-group mb-2';
+  div.id = `wh-row-${i}`;
+  div.innerHTML = `
+    <span class="input-group-text fw-bold"
+      style="background:${color}20;color:${color};width:36px;justify-content:center">${i+1}</span>
+    <input type="text" class="form-control" id="wh-${i}" placeholder="Ej: Camioneta ABCD-12" maxlength="40">
+    <button class="btn btn-outline-danger" onclick="removeWarehouse(${i})" title="Eliminar">
+      <i class="bi bi-trash3"></i>
+    </button>`;
+  list.appendChild(div);
+}
+
+function removeWarehouse(idx) {
+  const rows = document.getElementById('wh-list').querySelectorAll('.input-group');
+  if (rows.length <= 1) { toast('Debe quedar al menos una bodega', 'warning'); return; }
+  const row = document.getElementById(`wh-row-${idx}`);
+  if (row) row.remove();
+  // Re-numerar visualmente
+  document.getElementById('wh-list').querySelectorAll('.input-group').forEach((r, i) => {
+    r.id = `wh-row-${i}`;
+    const span  = r.querySelector('span');
+    const input = r.querySelector('input');
+    const btn   = r.querySelector('button');
+    const color = WAREHOUSE_COLORS[i % WAREHOUSE_COLORS.length];
+    if (span)  { span.textContent = i+1; span.style.background = `${color}20`; span.style.color = color; }
+    if (input) { input.id = `wh-${i}`; }
+    if (btn)   { btn.setAttribute('onclick', `removeWarehouse(${i})`); }
   });
+}
+
+function saveWarehouseNames() {
+  const inputs = document.getElementById('wh-list').querySelectorAll('input');
+  const names = Array.from(inputs).map((inp, i) => inp.value.trim() || `Bodega ${i+1}`);
   if (new Set(names).size !== names.length) {
     toast('Los nombres deben ser únicos', 'warning'); return;
   }
