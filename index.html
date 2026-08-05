@@ -521,19 +521,20 @@ function renderScanner() {
 
       const hint = document.getElementById('scan-hint');
 
-      // Extraer identificador del QR — acepta cualquier formato
+      // Extraer número del QR
       let itemId = null;
 
-      // Caso 1: QR de nuestra app — URL con ?item=N
+      // Caso 1: URL con ?item=N  (QR generado desde la app)
       try {
         const url = new URL(decoded);
         const p = url.searchParams.get('item');
-        if (p && p.trim()) itemId = p.trim();
+        if (p && !isNaN(parseInt(p))) itemId = String(parseInt(p));
       } catch {}
 
-      // Caso 2: cualquier otro contenido — usar el texto completo como ID
+      // Caso 2: el QR contiene solo un número
       if (!itemId) {
-        itemId = decoded.trim().substring(0, 200); // máx 200 chars
+        const num = parseInt(decoded.trim());
+        if (!isNaN(num) && num > 0) itemId = String(num);
       }
 
       if (!itemId) {
@@ -556,8 +557,8 @@ function renderScanner() {
 }
 
 function goToItem(id) {
-  const clean = String(id).trim();
-  if (clean) showView('item', { id: clean });
+  const num = parseInt(String(id).trim());
+  if (!isNaN(num) && num > 0) showView('item', { id: String(num) });
 }
 
 // ══════════════════════════════════════════════════
@@ -565,7 +566,7 @@ function goToItem(id) {
 // ══════════════════════════════════════════════════
 async function renderItemPage(itemId) {
   const c = document.getElementById('main-content');
-  if (!itemId || !itemId.trim()) {
+  if (!itemId || isNaN(Number(itemId))) {
     c.innerHTML = `<div class="alert alert-danger">Código inválido.</div>`; return;
   }
   if (!requireFirebase()) return;
@@ -575,7 +576,7 @@ async function renderItemPage(itemId) {
     <button class="btn btn-link ps-0 mb-2 text-muted" onclick="history.back()">
       <i class="bi bi-arrow-left"></i> Volver
     </button>
-    <h5 class="mb-3">Artículo <span class="fw-black" style="color:#1a56db">${itemId}</span></h5>
+    <h5 class="mb-3">Artículo <span class="fw-black" style="color:#1a56db">#${itemId}</span></h5>
     <div id="item-body">${loading('Cargando artículo...')}</div>
   `;
 
@@ -761,22 +762,53 @@ async function doTransfer(itemId, newWarehouse) {
 // ══════════════════════════════════════════════════
 //  VISTA: GENERADOR DE QR
 // ══════════════════════════════════════════════════
-function renderQRGenerator() {
+async function renderQRGenerator() {
   const c = document.getElementById('main-content');
+  c.innerHTML = loading('Cargando...');
+
+  // Cargar conteo desde Firebase
+  let lastGenerated = 0;
+  try {
+    const doc = await db.collection('config').doc('qr_counter').get();
+    if (doc.exists) lastGenerated = doc.data().last || 0;
+  } catch {}
+
+  const nextFrom = lastGenerated + 1;
+  const nextTo   = lastGenerated + 20;
+
   c.innerHTML = `
     <h6 class="text-muted fw-bold mb-3 text-uppercase" style="font-size:.72rem;letter-spacing:.06em">
       Generar Códigos QR para Imprimir
     </h6>
+
+    <!-- Contador total -->
+    <div class="card mb-3 p-3" style="background:linear-gradient(135deg,#1a56db,#3b82f6);color:#fff">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div style="font-size:.75rem;opacity:.85;text-transform:uppercase;letter-spacing:.05em">Total QR generados</div>
+          <div class="fw-black" style="font-size:2rem;line-height:1">${lastGenerated.toLocaleString('es-CL')}</div>
+        </div>
+        <i class="bi bi-qr-code" style="font-size:2.5rem;opacity:.4"></i>
+      </div>
+      ${lastGenerated > 0 ? `
+        <div class="mt-2" style="font-size:.82rem;opacity:.9">
+          Último generado: <strong>#${lastGenerated}</strong> — el próximo es <strong>#${nextFrom}</strong>
+        </div>` : `
+        <div class="mt-2" style="font-size:.82rem;opacity:.9">Aún no se han generado códigos</div>`}
+    </div>
+
     <div class="card mb-3">
       <div class="card-body">
         <div class="row g-3 align-items-end">
           <div class="col-5">
             <label class="form-label fw-semibold">Desde</label>
-            <input type="number" class="form-control form-control-lg" id="qr-from" value="1" min="1" inputmode="numeric">
+            <input type="number" class="form-control form-control-lg" id="qr-from"
+              value="${nextFrom}" min="1" inputmode="numeric">
           </div>
           <div class="col-5">
             <label class="form-label fw-semibold">Hasta</label>
-            <input type="number" class="form-control form-control-lg" id="qr-to" value="20" min="1" inputmode="numeric">
+            <input type="number" class="form-control form-control-lg" id="qr-to"
+              value="${nextTo}" min="1" inputmode="numeric">
           </div>
           <div class="col-2 text-muted text-center">
             <small id="qr-count">20 QR</small>
@@ -789,6 +821,7 @@ function renderQRGenerator() {
     </div>
     <div id="qr-output"></div>
   `;
+
   function updateCount() {
     const f = parseInt(document.getElementById('qr-from').value) || 0;
     const t = parseInt(document.getElementById('qr-to').value) || 0;
@@ -796,9 +829,10 @@ function renderQRGenerator() {
   }
   document.getElementById('qr-from').addEventListener('input', updateCount);
   document.getElementById('qr-to').addEventListener('input', updateCount);
+  updateCount();
 }
 
-function generateQRCodes() {
+async function generateQRCodes() {
   const from = parseInt(document.getElementById('qr-from').value);
   const to   = parseInt(document.getElementById('qr-to').value);
   if (isNaN(from)||isNaN(to)||from<1) { toast('Ingresa números válidos','warning'); return; }
@@ -806,9 +840,23 @@ function generateQRCodes() {
   if ((to-from+1) > 500) { toast('Máximo 500 códigos a la vez','warning'); return; }
 
   const ids = Array.from({length: to-from+1}, (_,i) => from+i);
+
+  // Guardar el número más alto generado en Firebase
+  try {
+    const ref = db.collection('config').doc('qr_counter');
+    const doc = await ref.get();
+    const currentLast = doc.exists ? (doc.data().last || 0) : 0;
+    if (to > currentLast) {
+      await ref.set({ last: to, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
+  } catch(e) { console.warn('No se pudo guardar el contador:', e); }
+
   document.getElementById('qr-output').innerHTML = `
     <div class="d-flex justify-content-between align-items-center mb-3 no-print">
-      <span class="text-muted small">${ids.length} códigos — del #${from} al #${to}</span>
+      <div>
+        <span class="fw-bold">${ids.length} códigos generados</span>
+        <span class="text-muted small ms-2">del #${from} al #${to}</span>
+      </div>
       <button class="btn btn-success btn-sm" onclick="window.print()">
         <i class="bi bi-printer"></i> Imprimir
       </button>
