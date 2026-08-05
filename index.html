@@ -146,6 +146,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<!-- docx.js para exportar Word -->
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 
 <script>
 // ══════════════════════════════════════════════════
@@ -852,14 +854,19 @@ async function generateQRCodes() {
   } catch(e) { console.warn('No se pudo guardar el contador:', e); }
 
   document.getElementById('qr-output').innerHTML = `
-    <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <div class="d-flex justify-content-between align-items-center mb-3 no-print flex-wrap gap-2">
       <div>
         <span class="fw-bold">${ids.length} códigos generados</span>
         <span class="text-muted small ms-2">del #${from} al #${to}</span>
       </div>
-      <button class="btn btn-success btn-sm" onclick="window.print()">
-        <i class="bi bi-printer"></i> Imprimir
-      </button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary btn-sm" id="btn-word" onclick="exportToWord(${from},${to})">
+          <i class="bi bi-file-earmark-word-fill"></i> Descargar Word
+        </button>
+        <button class="btn btn-success btn-sm" onclick="window.print()">
+          <i class="bi bi-printer"></i> Imprimir
+        </button>
+      </div>
     </div>
     <div class="qr-grid" id="qr-grid">
       ${ids.map(n => `
@@ -994,6 +1001,112 @@ function saveAppUrl() {
   if (!url) { toast('Ingresa una URL válida','warning'); return; }
   localStorage.setItem('appUrl', url);
   toast('✓ URL guardada');
+}
+
+// ══════════════════════════════════════════════════
+//  EXPORTAR A WORD
+// ══════════════════════════════════════════════════
+async function exportToWord(from, to) {
+  const btn = document.getElementById('btn-word');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando...'; }
+
+  try {
+    const { Document, Packer, Table, TableRow, TableCell, Paragraph,
+            ImageRun, TextRun, AlignmentType, WidthType, BorderStyle } = window.docx;
+
+    const ids = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+
+    // Capturar cada QR del DOM como ArrayBuffer PNG
+    const images = [];
+    for (const n of ids) {
+      const el = document.getElementById(`qr-${n}`);
+      const canvas = el?.querySelector('canvas');
+      if (canvas) {
+        const buf = await new Promise((res, rej) => {
+          canvas.toBlob(blob => {
+            const reader = new FileReader();
+            reader.onload  = () => res(reader.result);
+            reader.onerror = rej;
+            reader.readAsArrayBuffer(blob);
+          }, 'image/png');
+        });
+        images.push({ n, buffer: buf });
+      }
+    }
+
+    if (images.length === 0) { toast('No se encontraron QR para exportar', 'warning'); return; }
+
+    // Layout: 4 columnas, tamaño carta
+    const COLS       = 4;
+    const PAGE_W     = 12240; // carta en DXA
+    const MARGIN     = 720;   // ~0.5 inch
+    const TABLE_W    = PAGE_W - MARGIN * 2;
+    const CELL_W     = Math.floor(TABLE_W / COLS);
+    const QR_PX      = 110;   // tamaño imagen en puntos
+
+    const noBorder = { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' };
+
+    const buildRow = (rowItems) =>
+      new TableRow({
+        children: rowItems.map(item =>
+          new TableCell({
+            width: { size: CELL_W, type: WidthType.DXA },
+            borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder },
+            children: item ? [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 80, after: 40 },
+                children: [new ImageRun({
+                  data: item.buffer,
+                  type: 'png',
+                  transformation: { width: QR_PX, height: QR_PX }
+                })]
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 80 },
+                children: [new TextRun({ text: `#${item.n}`, bold: true, size: 18 })]
+              }),
+            ] : [new Paragraph('')]
+          })
+        )
+      });
+
+    // Agrupar en filas de COLS
+    const rows = [];
+    for (let i = 0; i < images.length; i += COLS) {
+      const chunk = Array.from({ length: COLS }, (_, j) => images[i + j] || null);
+      rows.push(buildRow(chunk));
+    }
+
+    const doc = new Document({
+      sections: [{
+        properties: { page: { size: { width: PAGE_W, height: 15840 }, margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } },
+        children: [
+          new Table({
+            columnWidths: Array(COLS).fill(CELL_W),
+            width: { size: TABLE_W, type: WidthType.DXA },
+            rows
+          })
+        ]
+      }]
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `MasterGlass-QR-${from}-al-${to}.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`✓ Word descargado — ${images.length} códigos`);
+
+  } catch(e) {
+    toast('Error al generar Word: ' + e.message, 'danger');
+    console.error(e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-word-fill"></i> Descargar Word'; }
+  }
 }
 
 // ══════════════════════════════════════════════════
