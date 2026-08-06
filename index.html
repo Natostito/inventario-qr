@@ -137,9 +137,6 @@
   <button class="nav-btn scan-btn" id="nav-scan" onclick="showView('scan')">
     <i class="bi bi-qr-code-scan" style="font-size:1.6rem"></i>
   </button>
-  <button class="nav-btn" id="nav-generate" onclick="showView('generate')">
-    <i class="bi bi-printer-fill"></i>Generar QR
-  </button>
 </div>
 
 
@@ -222,7 +219,7 @@ async function stopScanner() {
 }
 function setNav(view) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const map = { dashboard:'nav-dashboard', scan:'nav-scan', generate:'nav-generate', history:'nav-history' };
+  const map = { dashboard:'nav-dashboard', scan:'nav-scan', history:'nav-history' };
   if (map[view]) document.getElementById(map[view]).classList.add('active');
 }
 function loading(text='Cargando...') {
@@ -1072,6 +1069,21 @@ function renderSettings() {
       <i class="bi bi-arrow-left"></i> Volver
     </button>
     <h5 class="mb-3">Configuración</h5>
+
+    <!-- Acceso rápido: Generar QR -->
+    <div class="card mb-3" style="border-left:4px solid #1a56db;cursor:pointer" onclick="showView('generate')">
+      <div class="card-body py-3 d-flex align-items-center gap-3">
+        <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+          style="background:#1a56db18;color:#1a56db;width:44px;height:44px;font-size:1.3rem">
+          <i class="bi bi-printer-fill"></i>
+        </div>
+        <div class="flex-grow-1">
+          <div class="fw-bold">Generar códigos QR</div>
+          <div class="text-muted small">Imprimir o exportar a Word</div>
+        </div>
+        <i class="bi bi-chevron-right text-muted"></i>
+      </div>
+    </div>
 
     <!-- Bodegas -->
     <div class="card mb-3">
